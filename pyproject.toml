@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "POLiWAG"
+name = "poliwag"
 version = "0.1.0"
 description = "Prediction Of Lipopeptides Within Actinobacterial Genomes"
 readme = "README.md"
@@ -12,7 +12,8 @@ license = { file = "LICENSE" }
 authors = [{ name = "Barbara Terlouw", email = "barbara.terlouw@wur.nl" }]
 
 dependencies = [
-    "numpy",
+    "paras",
+    "biopython"
 ]
 
 [project.optional-dependencies]

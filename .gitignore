@@ -1,0 +1,75 @@
+# ======================
+# Python bytecode
+# ======================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ======================
+# Virtual environments
+# ======================
+.venv/
+venv/
+env/
+ENV/
+
+# ======================
+# Packaging / build artifacts
+# ======================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ======================
+# Pytest / coverage
+# ======================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# ======================
+# Static type checking
+# ======================
+.mypy_cache/
+.pyre/
+.pytype/
+
+# ======================
+# Linting / formatting
+# ======================
+.ruff_cache/
+
+# ======================
+# IDEs / editors
+# ======================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ======================
+# OS junk
+# ======================
+.DS_Store
+Thumbs.db
+
+# ======================
+# Jupyter
+# ======================
+.ipynb_checkpoints/
+
+# ======================
+# Logs
+# ======================
+*.log
+
+# ======================
+# Environment / secrets
+# ======================
+.env
+.env.*
+*.pem
+*.key

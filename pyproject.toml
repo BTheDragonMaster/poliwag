@@ -12,7 +12,6 @@ license = { file = "LICENSE" }
 authors = [{ name = "Barbara Terlouw", email = "barbara.terlouw@wur.nl" }]
 
 dependencies = [
-    "paras",
     "biopython"
 ]
 

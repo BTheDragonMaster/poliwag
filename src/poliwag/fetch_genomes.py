@@ -25,7 +25,7 @@ def fetch_ncbi_entries(taxon: int = 201174, out_file: str = "actinobacterial_ref
     out_file: str, default: actinobacterial_refseq_gbffs.zip
     """
     command = ['datasets', 'download', 'genome', 'taxon', f'{taxon}', '--assembly-source', 'refseq',
-               '--include gbff', '--dehydrated', '--filename', out_file]
+               '--include', 'gbff', '--dehydrated', '--filename', out_file]
 
     subprocess.call(command)
 

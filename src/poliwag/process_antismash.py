@@ -13,8 +13,9 @@ def get_gene_order(antismash_region_genbank: str, candidate_cluster_type: str = 
 
         nrps_pks_results = run_on_record(record, None, get_config())
 
+
         for domain_prediction in nrps_pks_results.domain_predictions:
-            print(domain_prediction)
+            print(type(domain_prediction))
 
         for region, predictions in nrps_pks_results.region_predictions.items():
 
@@ -25,7 +26,8 @@ def get_gene_order(antismash_region_genbank: str, candidate_cluster_type: str = 
 
     return gene_orders
 
-def get_module_order(antismash_region_genbank: str, candidate_cluster_type: str = 'NRPS') ->
+def get_module_order(antismash_region_genbank: str, candidate_cluster_type: str = 'NRPS'):
+    pass
 
 def get_modules_from_gbk():
 

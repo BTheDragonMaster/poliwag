@@ -1,3 +1,7 @@
+"""
+Class for storing a predicted polymer
+"""
+
 from typing import Optional
 
 

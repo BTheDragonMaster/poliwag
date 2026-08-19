@@ -1,3 +1,7 @@
+"""
+Module for antiSMASH JSON processing
+"""
+
 import sys
 from typing import Optional, Any
 

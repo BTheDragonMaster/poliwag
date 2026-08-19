@@ -4,7 +4,7 @@ import traceback
 
 from poliwag.utils import iterate_over_dir
 
-from poliwag.antismash_processing.parse_json import polymers_from_json, parse_json, as_to_polymer_blocks
+from poliwag.antismash_processing.json import as_to_polymers
 from poliwag.antismash_processing.polymer import PredictedPolymer
 
 
@@ -18,18 +18,6 @@ def parse_arguments() -> Namespace:
     args = parser.parse_args()
     return args
 
-
-def write_polymers_from_folder(antismash_output_folder: str, out_file: str) -> None:
-    with open(out_file, 'w') as out:
-        for _, folder_path in iterate_over_dir(antismash_output_folder, get_dirs=True):
-            for genome_name, file_path in iterate_over_dir(folder_path, '.json'):
-                try:
-                    polymers = polymers_from_json(file_path)
-                    for polymer in polymers:
-                        out.write(f"{polymer.accession}\t{polymer.region}\t{polymer.candidate_cluster}\t{polymer}\n")
-                except Exception as e:
-                    print(f"Could not decode input file {genome_name}")
-                    print(e)
 
 def write_polymers(polymers: list[PredictedPolymer], out_file: str, write_candidate_clusters: bool = True) -> None:
 
@@ -54,10 +42,7 @@ def parse_polymers_bulk(antismash_output_folder: str, per_gene: bool = False) ->
         for genome_name, file_path in iterate_over_dir(folder_path, '.json'):
             print(genome_name)
             try:
-                if not per_gene:
-                    polymers = parse_json(file_path)
-                else:
-                    polymers = as_to_polymer_blocks(file_path)
+                polymers = as_to_polymers(file_path, per_gene)
                 predicted_polymers.extend(polymers)
 
             except Exception:
@@ -69,6 +54,15 @@ def parse_polymers_bulk(antismash_output_folder: str, per_gene: bool = False) ->
 
     return predicted_polymers
 
+
+def read_unique_polymers(polymers_file: str) -> list[list[str]]:
+    unique_polymers: list[list[str]] = []
+    with open(polymers_file, 'r') as polymers:
+        for polymer in polymers:
+            polymer = polymer.strip()
+            monomers = polymer.split(' | ')
+            unique_polymers.append(monomers)
+    return unique_polymers
 
 def read_polymers(polymers_file: str) -> list[PredictedPolymer]:
     predicted_polymers = []
@@ -100,7 +94,6 @@ def get_unique_polymers(predicted_polymers: list[PredictedPolymer]) -> list[str]
     unique_polymers.sort()
 
     return unique_polymers
-
 
 def main() -> None:
     args = parse_arguments()

@@ -1,39 +1,49 @@
 import sys
-from typing import Optional
+from typing import Optional, Any
 
-from PIL.Image import register_open
-from antismash.common.serialiser import AntismashResults
-from antismash.modules.nrps_pks.results import NRPS_PKS_Results
 from antismash.modules.nrps_pks.name_mappings import get_substrate_by_name
-from antismash.modules.nrps_pks.results import modify_substrate as modify_substrate_as
 from antismash.modules.nrps_pks.pks_names import get_short_form
 
 from poliwag.antismash_processing.polymer import PredictedPolymer
 from dataclasses import dataclass
 import json
 
+
 @dataclass
 class Location:
+    """
+    Class to store a genomic location
+    """
     start: int
     end: int
     strand: str
 
-def convert_domain_name(domain_name: str) -> str:
-    name = domain_name.split('_')[-1].split('.')[0]
-    return name
+
+def convert_domain_name_to_type(domain_name: str) -> str:
+    """Convert name of an AS domain to its domain type, e.g. 'nrpspksdomains_H4696_RS46465_PKS_AT.1' -> 'AT'
+
+    :param domain_name: domain name of the form nrpspksdomains_H4696_RS46465_PKS_AT.1
+
+    :returns: domain type of the form AT
+    """
+    domain_type = domain_name.split('_')[-1].split('.')[0]
+
+    return domain_type
+
 
 def modify_substrate(domains: list[str], module_types: list[str], base: str = "") -> str:  # pylint: disable=too-many-branches
     """ Builds a monomer including modifications from the given base.
 
         Arguments:
-            module: the Module holding the relevant domains
-            base: a string of the substate (or an empty string in case of trans-AT)
+            domains: list of domains
+            module_types: list of module types
+            base: a string of the substrate (or an empty string in case of trans-AT)
 
         Returns:
             the modified substrate, or an empty string if no appropriate base was
             given
     """
-    domains = list(map(convert_domain_name, domains))
+    domains = list(map(convert_domain_name_to_type, domains))
 
     if "KS" in domains and "AT" not in domains:
         base = "mal"
@@ -80,7 +90,14 @@ def modify_substrate(domains: list[str], module_types: list[str], base: str = ""
 
 
 def parse_location(location: str) -> Location:
+    """Return genomic location from a location string of the form [634592:635573](+) or join{[634592:635573](+), 635576:635910](+)}
+
+    :param location: location string of the form [634592:635573](+)
+
+    :returns Location object
+    """
     if 'join' not in location:
+        # Location is of the form [start:end](+)
         data = location.split(':')
         start = int(data[0][1:].strip('>').strip('<'))
         end, strand = data[1].split('](')
@@ -88,6 +105,7 @@ def parse_location(location: str) -> Location:
         strand = strand[:-1]
         return Location(start, end, strand)
     else:
+        # Location is of the form join{[start_1:end_1](strand), start_2:end_2](strand)}
         data = location.split('join{')[-1]
         data = data[:-1]
         locations = data.split(', ')
@@ -114,7 +132,16 @@ def parse_location(location: str) -> Location:
         return Location(overall_start, overall_end, overall_strand)
 
 
-def get_modules_from_cds_name(cds_name: str, record: dict, strand: str) -> list:
+def get_modules_from_cds_name(cds_name: str, record: dict, strand: str) -> list[dict[str, Any]]:
+    """
+    Obtain list of modules from a CDS name
+
+    :param cds_name: name of the CDS
+    :param record: antiSMASH record in JSON format
+    :param strand: + or -
+
+    :return: list of antiSMASH modules
+    """
     module_features: list = []
     for feature in record["features"]:
 
@@ -131,7 +158,15 @@ def get_modules_from_cds_name(cds_name: str, record: dict, strand: str) -> list:
     return module_features
 
 
-def get_cds_from_name(cds_name, record: dict):
+def get_cds_from_name(cds_name: str, record: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Get CDS feature from a CDS name
+
+    :param cds_name: name of the CDS
+    :param record: antiSMASH record in JSON format
+
+    :return: CDS feature
+    """
     for feature in record["features"]:
         if feature["type"] == "CDS":
             if cds_name in feature["qualifiers"]["locus_tag"]:
@@ -141,8 +176,12 @@ def get_cds_from_name(cds_name, record: dict):
             if "product" in feature["qualifiers"] and cds_name in feature["qualifiers"]["product"]:
                 return feature
 
+    return None
 
-def get_sorted_modules(record: dict) -> dict:
+
+def get_sorted_modules(record: dict) -> dict[str, Any]:
+    """Retrieve sorted modules from an antiSMASH record in JSON format"""
+
     region_to_cluster_to_modules = {}
     if "modules" in record:
         if "antismash.modules.nrps_pks" in record["modules"]:
@@ -174,8 +213,15 @@ def get_sorted_modules(record: dict) -> dict:
     return region_to_cluster_to_modules
 
 
-def get_modules_per_gene(record: dict) -> dict:
-    gene_to_modules = {}
+def get_modules_per_gene(record: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """
+    Retrieve a mapping of genes to their modules from an antiSMASH record
+
+    :param record: antiSMASH record in JSON format
+
+    :return: mapping of genes to their modules
+    """
+    gene_to_modules: dict[str, list[dict[str, Any]]] = {}
     for feature in record["features"]:
         if feature["type"] == "CDS":
             modules = get_modules_from_cds_name(feature["qualifiers"]["locus_tag"][0], record, parse_location(feature["location"]).strand)
@@ -192,8 +238,20 @@ def get_gene_to_region(record: dict) -> dict:
     return gene_to_region
 
 
-def modules_to_polymer(modules: list, record: dict, region: int, cluster: Optional[int] = None,
+def modules_to_polymer(modules: list[dict[str, Any]],
+                       record: dict,
+                       region: int,
+                       cluster: Optional[int] = None,
                        locus_tag: Optional[str] = None) -> PredictedPolymer:
+    """
+    Obtain a building block polymer from a list of modules within a single gene
+
+    :param modules: list of antiSMASH modules
+    :param record: antiSMASH record in JSON format
+    :param region: region number
+    :param cluster: candidate cluster number
+    :param locus_tag: locus tag of the modules
+    """
     polymer = []
     for i, module in enumerate(modules):
         if "incomplete" in module["qualifiers"]:
@@ -222,14 +280,26 @@ def modules_to_polymer(modules: list, record: dict, region: int, cluster: Option
 
     return PredictedPolymer(polymer, record["id"], int(region), cluster, locus_tag)
 
-def get_regions(record: dict) -> list:
+def get_regions(record: dict) -> list[dict[str, Any]]:
+    """
+    Obtain regions from antiSMASH record
+
+    :param record: antiSMASH record in JSON format
+    :return: list of regions
+    """
     regions = []
     for feature in record["features"]:
         if feature["type"] == "region":
             regions.append(feature)
     return regions
 
-def region_from_cds(cds: dict, record) -> int:
+def region_from_cds(cds: dict[str, Any], record: dict[str, Any]) -> int:
+    """
+    Obtain region number from CDS
+    :param cds: CDS in antiSMASH JSON format
+    :param record: antiSMASH record in JSON format
+    :return: region number
+    """
     cds_location = parse_location(cds["location"])
 
     for region in get_regions(record):
@@ -241,10 +311,13 @@ def region_from_cds(cds: dict, record) -> int:
         return 0
 
 
+def _as_to_polymers_per_gene(records: list[dict[str, Any]]) -> list[str]:
+    """
+    Return per-gene predicted NRPS/PKS polymers from a list of antiSMASH records
 
-def as_to_polymer_blocks(antismash_json_file: str) -> list:
-    antismash_data = json.load(open(antismash_json_file))
-    records = antismash_data['records']
+    :param records: list of antiSMASH records in JSON format
+    :return: list of NRPS/PKS polymers, with each polymer representing the building blocks incorporated by a single gene
+    """
     polymers = []
     for record in records:
 
@@ -260,9 +333,13 @@ def as_to_polymer_blocks(antismash_json_file: str) -> list:
                     polymers.append(polymer)
     return polymers
 
-def parse_json(antismash_json_file: str):
-    antismash_data = json.load(open(antismash_json_file))
-    records = antismash_data['records']
+def _as_to_polymers_per_region(records: list[dict[str, Any]]):
+    """
+    Return per-region predicted NRPS/PKS polymers from a list of antiSMASH records
+
+    :param records: list of antiSMASH records in JSON format
+    :return: list of NRPS/PKS polymers, with each polymer representing the building blocks incorporated by the entire region
+    """
     polymers = []
     for record in records:
         region_to_cluster_to_modules = get_sorted_modules(record)
@@ -272,64 +349,24 @@ def parse_json(antismash_json_file: str):
                 polymers.append(polymer)
     return polymers
 
-
-
-def polymers_from_json(antismash_json_file: str) -> list[PredictedPolymer]:
+def as_to_polymers(antismash_json_file: str, per_gene: bool) -> list[str]:
     """
-    Return a list of polymers based on PARAS predictions in antiSMASH JSON output
+    Return predicted NRPS/PKS polymers from antiSMASH JSON format
+
+    :param antismash_json_file: antiSMASH JSON output file
+    :param per_gene: whether to return predicted NRPS/PKS polymers per gene or per region
+    :return: list of NRPS/PKS polymers
     """
-    antismash_results = AntismashResults.from_file(antismash_json_file)
-    polymers = []
-    for i, record in enumerate(antismash_results.records):
-        result = antismash_results.results[i]
-        if 'antismash.modules.nrps_pks' in result:
 
-
-            nrps_annotations = NRPS_PKS_Results.from_json(result['antismash.modules.nrps_pks'], record)
-            nrps_annotations.add_to_record(record)
-
-            for region in record.get_regions():
-                region_number = str(region.get_region_number())
-                if "NRPS" in region.product_categories:
-                    if region_number in result["antismash.modules.nrps_pks"]["region_predictions"]:
-                        region_predictions = result["antismash.modules.nrps_pks"]["region_predictions"][region_number]
-                    else:
-                        continue
-
-
-                    for region_prediction in region_predictions:
-
-                        cluster_number = region_prediction["sc_number"]
-                        order = region_prediction["ordering"]
-                        polymer = []
-                        seen_modules = set()
-                        for gene in order:
-                            cds = record.get_cds_by_name(gene)
-                            if cds.location.strand == 1:
-                                sorted_modules = sorted(cds.modules, key=lambda x: x.location.start)
-                            else:
-                                sorted_modules = sorted(cds.modules, key=lambda x: x.location.start, reverse=True)
-
-                            for module in sorted_modules:
-
-                                if module not in seen_modules:
-
-                                    for domain in module.domains:
-
-                                        if domain.domain == 'AMP-binding':
-
-                                            substrate = nrps_annotations.domain_predictions[domain.domain_id]['paras'].get_classification()[0]
-                                            monomer = modify_substrate_as(module, substrate)
-                                            polymer.append(monomer)
-                                seen_modules.add(module)
-                        predicted_polymer = PredictedPolymer(polymer, record.id,
-                                                             region.get_region_number(),
-                                                             cluster_number)
-                        polymers.append(predicted_polymer)
-
+    antismash_data = json.load(open(antismash_json_file))
+    records = antismash_data['records']
+    if per_gene:
+        polymers = _as_to_polymers_per_gene(records)
+    else:
+        polymers = _as_to_polymers_per_region(records)
 
     return polymers
 
 
 if __name__ == "__main__":
-    print(as_to_polymer_blocks(sys.argv[1]))
+    print(as_to_polymers(sys.argv[1], True))

@@ -91,13 +91,20 @@ def main():
     tmp_hmm = os.path.join(args.temp_dir, "tmp.hmm")
     run_hmmscan(args.fasta, args.hmm_database, tmp_hmm)
     id_to_hit = parse_hmm_results(tmp_hmm)
+    counter = 0
     with open(args.output, 'w') as out:
         for seq_id, hit in id_to_hit.items():
             aln_to_query = build_alignment_map(hit)
-            amplicon = extract_amplicon(hit, aln_to_query[STARTING_POSITION], amplicon_size=33)
+            if STARTING_POSITION in aln_to_query:
+                amplicon = extract_amplicon(hit, aln_to_query[STARTING_POSITION], amplicon_size=33)
+            else:
+                print(f"Could not extract amplicon for sequence {seq_id}")
+                counter += 1
 
             print(amplicon)
             out.write(f">{seq_id}\n{amplicon}\n")
+
+    print(f"Could not find amplicons for {counter} sequences.")
 
 if __name__ == "__main__":
     main()

@@ -5,8 +5,36 @@ aligner:
   extend_internal_gap_score: -10.0
   open_end_gap_score: -12.0
   extend_end_gap_score: -10.0
-matrix:
-  chirality_aware_scoring: true
-  methylation_aware_scoring: true
-  wildcard_for_unknowns: false
+wildcard:
+  wildcard_for_unknowns: true
   wildcard_character: "X"
+tailoring:
+  chirality: # Bonuses/penalties for chirality matches and mismatches
+    chirality_aware_scoring: true # If true, use chirality-aware scoring
+    scoring:
+      l_l: 3.0  # e.g. L-alanine vs L-cysteine
+      l_d: -5.0 # e.g. L-alanine vs D-cysteine
+      d_d: 5.0  # e.g. D-alanine vs D-cysteine
+      l_x: 0.0  # e.g. L-alanine vs glycine (which has no chiral alpha-carbon)
+      d_x: 0.0  # e.g. D-alanine vs glycine (which has no chiral alpha-carbon)
+      x_x: 0.5  # e.g. glycine vs glycine (which has no chiral alpha-carbon)
+    nomenclature:
+      null: "D-"   # e.g. alanine -> D-alanine
+      "L-": "D-"   # e.g. L-alanine -> D-alanine
+      "2S": "2R" # e.g. 2S,3S-diaminobutyric acid -> 2R,3S-diaminobutyric acid
+    allo_prefix: "allo-" # If the beta-carbon is also chiral, the D-form should become allo, e.g. L-threonine -> D-allo-threonine
+    allo_exclusions: ["3S", "3R", "R-beta", "S-beta", "R-3", "S-3"] # Some substrates have absolute stereochemistry defined at the beta-carbon. In these cases, the allo-prefix is not needed.
+    exclude:
+      [ "branched", "2-aminoadipic acid" ] # e.g. 'aspartic acid branched' will not be epimerized to its D-form
+  n_methylation: # Bonuses/penalties for N-methylation matches and mismatches
+    n_methylation_aware_scoring: true # If true, use N-methylation-aware scoring
+    scoring:
+      y_y: 1.0  # e.g. NMe-L-alanine vs NMe-L-cysteine
+      y_n: -1.0 # e.g. NMe-L-alanine vs L-cysteine
+      n_n: 1.0  # e.g. L-alanine vs L-cysteine
+      y_x: 0.0  # e.g. NMe-L-alanine vs octanoic acid (which has no N and cannot be methylated)
+      n_x: 0.0  # e.g. # e.g. L-alanine vs octanoic acid (which has no N and cannot be methylated)
+      x_x: 0.0  # e.g. decanoic acid vs octanoic acid (which has no N and cannot be methylated)
+    prefix: "NMe-" # e.g. alanine -> NMe-alanine
+    exclude:
+      [] # Put any substrate names or substrings here that should not get N-methylated versions

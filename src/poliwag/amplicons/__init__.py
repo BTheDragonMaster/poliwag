@@ -1,1 +1,0 @@
-def get_amplicon_from_domain()

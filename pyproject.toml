@@ -12,7 +12,9 @@ license = { file = "LICENSE" }
 authors = [{ name = "Barbara Terlouw", email = "barbara.terlouw@wur.nl" }]
 
 dependencies = [
-    "biopython"
+    "biopython",
+    "pandas",
+    "tqdm"
 ]
 
 [project.optional-dependencies]

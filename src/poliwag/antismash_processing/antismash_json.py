@@ -371,6 +371,18 @@ def as_to_polymers(antismash_json_file: str, per_gene: bool) -> list[str]:
 
     return polymers
 
+def as_to_a_domains(antismash_json_file: str, out_file: str) -> None:
+    """
+    Write antiSMASH A domains to file
+    """
+    antismash_data = json.load(open(antismash_json_file))
+    records = antismash_data['records']
+
+    for record in records:
+        for feature in record["features"]:
+            if feature["type"] == "aSDomain":
+                print(feature)
+
 
 if __name__ == "__main__":
-    print(as_to_polymers(sys.argv[1], True))
+    print(as_to_a_domains(sys.argv[1], sys.argv[2]))

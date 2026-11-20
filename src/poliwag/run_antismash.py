@@ -40,9 +40,9 @@ def parse_arguments() -> Namespace:
 
 
 def run_antismash(input_file: str, output_dir: str, cpus: int = 2,
-                  output_basename: Optional[str] = None) -> None:
+                  output_basename: Optional[str] = None) -> int:
     """
-    Run antiSMASH from command line
+    Run antiSMASH from command line. Returns the antiSMASH exit code (0 on success).
 
     input_gbk: str, path to input .gbff file
     output_dir: str, path to output directory
@@ -55,7 +55,7 @@ def run_antismash(input_file: str, output_dir: str, cpus: int = 2,
     if output_basename is not None:
         command.extend(['--output-basename', output_basename])
 
-    subprocess.call(command)
+    return subprocess.call(command)
 
 
 def move_antismash_region_files(input_folder: str, output_folder: str) -> None:
@@ -122,7 +122,12 @@ def run_antismash_from_fna_folder(input_folder: str, temp_folder: str, antismash
         output_folder = os.path.join(antismash_output_folder, accession)
         antismash_temp_output = os.path.join(temp_folder, accession)
         if not os.path.exists(output_folder) or rerun:
-            run_antismash(file_path, antismash_temp_output, cpus, accession)
+            return_code = run_antismash(file_path, antismash_temp_output, cpus, accession)
+            if return_code != 0 or not os.path.isdir(antismash_temp_output):
+                print(f"AntiSMASH failed on {accession} (exit code {return_code}). Continuing..")
+                if os.path.isdir(antismash_temp_output):
+                    rmtree(antismash_temp_output)
+                continue
             move_antismash_json_file(antismash_temp_output, output_folder)
             rmtree(antismash_temp_output)
             genomes_processed += 1

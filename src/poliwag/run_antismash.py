@@ -22,6 +22,9 @@ def parse_arguments() -> Namespace:
     parser.add_argument('--from_ncbi_dataset', action='store_true',
                         help="If given, the input is an NCBI fetch.txt file, obtained by running the fetch_genomes script.\
                              Genomes will be downloaded 100 at a time and erased after running antiSMASH.")
+    parser.add_argument('--from_fna_folder', action='store_true',
+                        help="If given, the input is a flat folder of .fna (nucleotide FASTA) files, one per genome. \
+                             Each file is run through antiSMASH and results are written to a folder named after the file.")
     parser.add_argument('-o', '--output_directory', type=str, required=True,
                         help="Output directory. \
                         Will contain one folder per genome labelled by RefSeq assembly accession")
@@ -108,6 +111,28 @@ def run_antismash_from_genomes_folder(input_folder: str, temp_folder: str, antis
             print(f"Number of genomes processed: {genomes_processed}")
 
 
+def run_antismash_from_fna_folder(input_folder: str, temp_folder: str, antismash_output_folder: str, rerun: bool,
+                                  cpus: int) -> None:
+    """
+    Run antiSMASH on every .fna file in a folder. Output for genome.fna goes in <antismash_output_folder>/genome
+    """
+    genomes_processed = get_genomes_processed(antismash_output_folder, rerun)
+    for file_name, file_path in sorted(iterate_over_dir(input_folder, '.fna')):
+        accession = file_name[:-len('.fna')]
+        output_folder = os.path.join(antismash_output_folder, accession)
+        antismash_temp_output = os.path.join(temp_folder, accession)
+        if not os.path.exists(output_folder) or rerun:
+            run_antismash(file_path, antismash_temp_output, cpus, accession)
+            move_antismash_json_file(antismash_temp_output, output_folder)
+            rmtree(antismash_temp_output)
+            genomes_processed += 1
+        else:
+            print(f"AntiSMASH was already run on {accession}. Continuing..")
+
+        if genomes_processed % 10 == 0 and genomes_processed != 0:
+            print(f"Number of genomes processed: {genomes_processed}")
+
+
 def main():
     """
     Run antiSMASH on NCBI dataset
@@ -120,7 +145,12 @@ def main():
     if not os.path.exists(temp_folder):
         os.mkdir(temp_folder)
 
-    if not args.from_ncbi_dataset:
+    if args.from_fna_folder and args.from_ncbi_dataset:
+        raise SystemExit("--from_fna_folder and --from_ncbi_dataset cannot be used together.")
+
+    if args.from_fna_folder:
+        run_antismash_from_fna_folder(args.input, temp_folder, args.output_directory, args.rerun, args.cpus)
+    elif not args.from_ncbi_dataset:
         run_antismash_from_genomes_folder(args.input, temp_folder, args.output_directory, args.rerun, args.cpus)
     else:
         run_antismash_from_ncbi_query(args.input, temp_folder, args.output_directory, args.rerun, args.cpus)

@@ -3,11 +3,12 @@ Script to run antiSMASH on a large collection of genomes from the command line. 
 """
 
 import os
+import sys
 import shlex
 import subprocess
 from typing import List, Optional
 from shutil import move, rmtree, which
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, SUPPRESS
 
 from poliwag.utils import iterate_over_dir
 
@@ -38,6 +39,8 @@ def parse_arguments() -> Namespace:
                         help="Number of antiSMASH runs to execute at the same time using GNU parallel. Only available \
                              with --from_fna_folder. Total CPU use is roughly jobs x cpus. Default: 1 (sequential, \
                              GNU parallel not needed).")
+    # Internal: used by --jobs, each GNU parallel job runs this script on a single genome
+    parser.add_argument('--single_fna', type=str, default=None, help=SUPPRESS)
     parser.add_argument('-js', )
     args = parser.parse_args()
 
@@ -179,6 +182,22 @@ def collect_antismash_result(accession: str, return_code: int, antismash_temp_ou
     return True
 
 
+def run_and_collect_fna(accession: str, file_path: str, temp_folder: str, antismash_output_folder: str,
+                        cpus: int) -> bool:
+    """
+    Run antiSMASH on one .fna file, then move the json to <antismash_output_folder>/<accession> and clean up.
+    Returns True on success.
+    """
+    antismash_temp_output = os.path.join(temp_folder, accession)
+    if os.path.isdir(antismash_temp_output):
+        # Leftover from an interrupted run
+        rmtree(antismash_temp_output)
+
+    return_code = run_antismash(file_path, antismash_temp_output, cpus, accession)
+    return collect_antismash_result(accession, return_code, antismash_temp_output,
+                                    os.path.join(antismash_output_folder, accession))
+
+
 def run_antismash_from_fna_folder(input_folder: str, temp_folder: str, antismash_output_folder: str, rerun: bool,
                                   cpus: int, jobs: int = 1) -> None:
     """
@@ -199,23 +218,19 @@ def run_antismash_from_fna_folder(input_folder: str, temp_folder: str, antismash
     if jobs > 1:
         print(f"Running {len(pending)} genomes, up to {jobs} at a time with {cpus} CPUs each "
               f"({jobs * cpus} CPUs in total).")
-        commands = [build_antismash_command(file_path, os.path.join(temp_folder, accession), cpus, accession)
-                    for accession, file_path in pending]
+        # Each job runs this script on a single genome, so results are moved into place as soon as that genome
+        # is done, not at the end of the whole run.
+        commands = [[sys.executable, os.path.abspath(__file__), '-i', input_folder, '-o', antismash_output_folder,
+                     '--from_fna_folder', '--single_fna', file_path, '-c', str(cpus)]
+                    for _, file_path in pending]
         joblog_path = os.path.join(temp_folder, "parallel_joblog.tsv")
         return_codes = run_commands_with_gnu_parallel(commands, jobs, cpus, joblog_path)
-        succeeded = 0
-        for (accession, _), return_code in zip(pending, return_codes):
-            if collect_antismash_result(accession, return_code, os.path.join(temp_folder, accession),
-                                        os.path.join(antismash_output_folder, accession)):
-                succeeded += 1
+        succeeded = sum(1 for return_code in return_codes if return_code == 0)
         print(f"Finished: {succeeded} genomes succeeded, {len(pending) - succeeded} failed.")
         return
 
     for accession, file_path in pending:
-        antismash_temp_output = os.path.join(temp_folder, accession)
-        return_code = run_antismash(file_path, antismash_temp_output, cpus, accession)
-        if collect_antismash_result(accession, return_code, antismash_temp_output,
-                                    os.path.join(antismash_output_folder, accession)):
+        if run_and_collect_fna(accession, file_path, temp_folder, antismash_output_folder, cpus):
             genomes_processed += 1
 
         if genomes_processed % 10 == 0 and genomes_processed != 0:
@@ -234,6 +249,14 @@ def main():
         raise SystemExit("--jobs greater than 1 is only available with --from_fna_folder.")
     if args.jobs > 1 and which('parallel') is None:
         raise SystemExit("--jobs greater than 1 requires GNU parallel, but 'parallel' was not found on PATH.")
+
+    if args.single_fna is not None:
+        # Worker mode (see --jobs): process one genome and exit, without touching the shared temp folder
+        temp_folder = os.path.join(args.output_directory, "temp")
+        os.makedirs(temp_folder, exist_ok=True)
+        accession = os.path.basename(args.single_fna)[:-len('.fna')]
+        success = run_and_collect_fna(accession, args.single_fna, temp_folder, args.output_directory, args.cpus)
+        sys.exit(0 if success else 1)
 
     if not os.path.exists(args.output_directory):
         os.mkdir(args.output_directory)
